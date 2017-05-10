@@ -54,23 +54,4 @@ void printSizes() {
     printf("std::vector<cell>: %lu\n", sizeof(std::vector<cell>));
 }
 
-namespace std {
-    std::string to_string(coord c) {
-        return to_string(c.x) + " " + to_string(c.y) + " " + to_string(c.value);
-    }
-}
-
-template <typename TYPE>
-void printVector(std::vector<TYPE> list) {
-    if (list.empty()) {
-        printf("[]\n");
-        return;
-    }
-
-    printf("[%s", std::to_string(list.at(0)).c_str());
-    for (int i = 1; i < list.size(); ++i)
-        printf(", %s", std::to_string(list.at(i)).c_str());
-    printf("]\n");
-}
-
 #endif

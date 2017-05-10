@@ -250,20 +250,6 @@ void updateCities(cell state[]) {
         attackNeighbors(state, list[i].x, list[i].y);
 }
 
-//XXX: deprecated, but kept as a known working algorithm
-int update(cell state[], int x, int y) {
-    int i = y * 5 + x;
-    switch (state[i].type) {
-        case EMPTY: return 0;
-        case WASTE: return -5;
-        case WATER: return 4 * flood(state, x, y, WATER) - sumNeighboringCities(state, x, y);
-        case FARM : return std::max(0, 30 - countNeighbors(state, x, y, FARM) * 10);
-        case CITY : return state[i].data * 10;
-    }
-
-    assert(false); //this should never happen!
-}
-
 void updateWater(cell state[]) {
     for (int i = 2; i < 25 - 2; ++i) {
         if (state[i].type == WATER)
