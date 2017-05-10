@@ -27,3 +27,7 @@
 *.exe
 *.out
 *.app
+
+# Mac + Xcode files
+.DS_Store
+*.plist
