@@ -29,6 +29,11 @@ typedef struct {
     i16 value;
 } move, coord;
 
+typedef struct {
+    i32 index;
+    i8 types[4];
+} type_bag;
+
 bool operator<(coord const & lhs, coord const & rhs) {
     return lhs.value < rhs.value;
 }
@@ -40,8 +45,30 @@ const i8 FARM   = 3;
 const i8 CITY   = 4;
 const i8 MARKED = 5;
 
+type_bag randomBag() {
+    type_bag bag = { 0, { WASTE, WATER, FARM, CITY } };
+    std::random_shuffle(bag.types, bag.types + 4);
+    return bag;
+}
+
+i8 type(type_bag &bag) {
+    return bag.types[bag.index];
+}
+
+void pickNext(type_bag &bag) {
+    ++bag.index;
+
+    if (bag.index == 4) {
+        bag.index = 0;
+        std::random_shuffle(bag.types, bag.types + 4);
+    }
+}
+
 void printSizes() {
+    type_bag bags[4];
     printf("cell: %lu\n", sizeof(cell));
+    printf("type_bag: %lu\n", sizeof(type_bag));
+    printf("type_bag[4]: %lu\n", sizeof(bags));
     printf("sf::CircleShape: %lu\n", sizeof(sf::CircleShape));
     printf("sf::Event: %lu\n", sizeof(sf::Event));
     printf("sf::FloatRect: %lu\n", sizeof(sf::FloatRect));

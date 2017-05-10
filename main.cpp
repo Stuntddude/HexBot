@@ -31,12 +31,13 @@ int score(cell state[]) {
 
 void drawGame(sf::RenderWindow &window, sf::Font &font, cell state[],
               i8 nextType, int total, int turns) {
-    sf::Color colors[5] = {
+    sf::Color colors[6] = {
         sf::Color::White,
         sf::Color::Red,
         sf::Color::Cyan,
         sf::Color::Green,
-        sf::Color(0xAAAAAAFF)
+        sf::Color(0xAAAAAAFF),
+        sf::Color(0xFF00FFFF) //magenta means we fucked up
     };
 
     //draw next tile
@@ -65,6 +66,8 @@ void drawGame(sf::RenderWindow &window, sf::Font &font, cell state[],
         text.setPosition(600, 450);
         window.draw(text);
     }
+
+
 
     for (int y = 0; y < 5; ++y) {
         for (int x = 0; x < 5; ++x) {
@@ -565,9 +568,21 @@ int main(int, char const**) {
     //initialize game state
 //    srand(time(NULL));
     cell state[5 * 5 - 2]; //since we never touch the last two cells, no need to store them
-    //TODO: use tile bags like in japes version
-    //TODO: optimize selection algorithm to take tile bag behavior into account
-    i8 nextType = rand() % 4 + 1;
+    type_bag bag = randomBag();
+    //std::find gives inscrutable template errors for no discernable reason
+    //(classic C++), so we're doing it by hand
+    int waterIndex, farmIndex;
+    for (int i = 0; i < 4; ++i) {
+        if (bag.types[i] == WATER)
+            waterIndex = i;
+        else if (bag.types[i] == FARM)
+            farmIndex = i;
+    }
+
+    //disallow generating a farm tile before a water tile
+    if (farmIndex > waterIndex)
+        std::swap(bag.types[farmIndex], bag.types[waterIndex]);
+
     for (int i = 2; i < 25 - 2; ++i)
         state[i] = { 0, 0, 0 };
     int turns = 30;
@@ -594,15 +609,15 @@ int main(int, char const**) {
                             pos -= sf::Vector2f(event.mouseButton.x,
                                                 event.mouseButton.y);
                             float dist = sqrtf(pos.x * pos.x + pos.y * pos.y);
-                            if (dist < 50 && state[y * 5 + x].type != nextType) {
+                            if (dist < 50 && state[y * 5 + x].type != type(bag)) {
                                 printf("placing at %d, %d\n", x, y);
                                 printf("mouse at %d, %d\n", event.mouseButton.x,
                                                             event.mouseButton.y);
                                 printf("tile at %f, %f\n\n", tilePosition(x, y).x,
                                                              tilePosition(x, y).y);
-                                place(state, x, y, nextType);
+                                place(state, x, y, type(bag));
                                 total += score(state);
-                                nextType = rand() % 4 + 1;
+                                pickNext(bag);
                                 --turns;
                             }
                         }
@@ -614,13 +629,14 @@ int main(int, char const**) {
             if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Space) {
                 move best;
 
+                //TODO: optimize selection algorithm to take tile bag behavior into account
                 sf::Clock clock;
                 if (turns < 2) {
-                    best = findBestMove(state, nextType);
+                    best = findBestMove(state, type(bag));
                 } else {
 //                    best = findBestMove(state, nextType);
-//                    best = minimax(state, nextType, std::min(turns, 3));
-                    best = avgmax(state, nextType, std::min(turns, 3));
+//                    best = minimax(state, type(bag), std::min(turns, 3));
+                    best = avgmax(state, type(bag), std::min(turns, 3));
                 }
                 sf::Time elapsed = clock.getElapsedTime();
                 fullTime += elapsed;
@@ -629,18 +645,24 @@ int main(int, char const**) {
                 printf("      TIME ELAPSED: %f\n", elapsed.asSeconds());
                 printf("TOTAL TIME ELAPSED: %f\n\n", fullTime.asSeconds());
 
-                place(state, best.x, best.y, nextType);
+                place(state, best.x, best.y, type(bag));
                 total += score(state);
-                nextType = rand() % 4 + 1;
+                pickNext(bag);
                 --turns;
             }
 
             if (event.type == sf::Event::KeyPressed) {
                 switch (event.key.code) {
-                    case sf::Keyboard::Num1: nextType = WASTE; break;
-                    case sf::Keyboard::Num2: nextType = WATER; break;
-                    case sf::Keyboard::Num3: nextType = FARM ; break;
-                    case sf::Keyboard::Num4: nextType = CITY ; break;
+//                    case sf::Keyboard::Num1: nextType = WASTE; break;
+//                    case sf::Keyboard::Num2: nextType = WATER; break;
+//                    case sf::Keyboard::Num3: nextType = FARM ; break;
+//                    case sf::Keyboard::Num4: nextType = CITY ; break;
+                    case sf::Keyboard::LBracket:
+                        std::rotate(bag.types, bag.types + 1, bag.types + 4);
+                        break;
+                    case sf::Keyboard::RBracket:
+                        std::rotate(bag.types, bag.types + 3, bag.types + 4);
+                        break;
                     default: break;
                 }
             }
@@ -648,7 +670,7 @@ int main(int, char const**) {
 
         window.clear();
 
-        drawGame(window, font, state, nextType, total, turns);
+        drawGame(window, font, state, type(bag), total, turns);
 
         window.display();
     }
