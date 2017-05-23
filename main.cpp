@@ -430,7 +430,7 @@ move minimax(cell state[], i8 nextType, int layer) {
 }
 
 //TODO: use floating point values for expectimax averages
-move findBestAverageMove(cell state[]){
+move findBestAverageMove(cell state[], type_bag bag){
     cell next[5 * 5 - 2];
 
     move best = { 0, 0, -32000 };
@@ -444,7 +444,9 @@ move findBestAverageMove(cell state[]){
                 int total = 0;
                 int divisor = 0;
 
-                for (int t = WASTE; t <= CITY; ++t) {
+//                for (int t = WASTE; t <= CITY; ++t) {
+                for (int i = bag.index; i < 4; ++i) {
+                    i8 t = bag.types[i];
                     if (t != state[i].type) {
                         //create a copy of the current state
                         memcpy(next + 2, state + 2, 21 * sizeof(cell));
@@ -456,12 +458,16 @@ move findBestAverageMove(cell state[]){
                     }
                 }
 
-                int avg = round(static_cast<float>(total)/static_cast<float>(divisor));
+                //accidentally dividing by 0 could fuck us up, so preferably don't do that
+                if (divisor > 0) {
+                    //probably only one of these casts is necessary
+                    int avg = round(static_cast<float>(total)/static_cast<float>(divisor));
 
-                if (avg > best.value) {
-                    best.x = x;
-                    best.y = y;
-                    best.value = avg;
+                    if (avg > best.value) {
+                        best.x = x;
+                        best.y = y;
+                        best.value = avg;
+                    }
                 }
             }
         }
@@ -470,9 +476,11 @@ move findBestAverageMove(cell state[]){
     return best;
 }
 
-int avgmax(cell state[], int layer) {
+int avgmaxImpl(cell state[], type_bag bag, int layer) {
+    pickNextSimple(bag);
+
     if (layer < 2) {
-        return findBestAverageMove(state).value + score(state);
+        return findBestAverageMove(state, bag).value + score(state);
     }
 
     cell next[5 * 5 - 2];
@@ -487,7 +495,11 @@ int avgmax(cell state[], int layer) {
                 int total = 0;
                 int divisor = 0;
 
-                for (int t = WASTE; t <= CITY; ++t) {
+                //the bot can't know which type comes next in the bag, only which ones are left,
+                //so it must treat every possibility as eaqually probable
+//                for (int t = WASTE; t <= CITY; ++t) {
+                for (int i = bag.index; i < 4; ++i) {
+                    i8 t = bag.types[i];
                     if (t != state[i].type) {
                         //create a copy of the current state
                         memcpy(next + 2, state + 2, 21 * sizeof(cell));
@@ -495,17 +507,20 @@ int avgmax(cell state[], int layer) {
                         place(next, x, y, t);
 
 //                        total += score(next);
-                        total += avgmax(next, layer - 1);
+                        total += avgmaxImpl(next, pick(bag, i), layer - 1);
                         ++divisor;
                     }
                 }
 
-                int avg = round(static_cast<float>(total)/divisor);
+                //accidentally dividing by 0 could fuck us up, so preferably don't do that
+                if (divisor > 0) {
+                    int avg = round(static_cast<float>(total)/divisor);
 
-                if (avg > best.value) {
-                    best.x = x;
-                    best.y = y;
-                    best.value = avg;
+                    if (avg > best.value) {
+                        best.x = x;
+                        best.y = y;
+                        best.value = avg;
+                    }
                 }
             }
         }
@@ -514,7 +529,7 @@ int avgmax(cell state[], int layer) {
     return best.value + score(state);
 }
 
-move avgmax(cell state[], i8 nextType, int layer) {
+move avgmax(cell state[], type_bag bag, int layer) {
     cell next[5 * 5 - 2];
 
     move best = { 0, 0, -32000 };
@@ -523,13 +538,13 @@ move avgmax(cell state[], i8 nextType, int layer) {
     for (int y = 0; y < 5; ++y) {
         for (int x = 0; x < 5; ++x) {
             int i = y * 5 + x;
-            if (exists(x, y) && state[i].type != nextType) {
+            if (exists(x, y) && state[i].type != type(bag)) {
                 //create a copy of the current state
                 memcpy(next + 2, state + 2, 21 * sizeof(cell));
 
-                place(next, x, y, nextType);
+                place(next, x, y, type(bag));
 
-                int value = avgmax(next, layer - 1);
+                int value = avgmaxImpl(next, bag, layer - 1);
 
                 if (value > best.value) {
                     best.x = x;
@@ -567,6 +582,7 @@ int main(int, char const**) {
 
     //initialize game state
 //    srand(time(NULL));
+//    srand(0);
     cell state[5 * 5 - 2]; //since we never touch the last two cells, no need to store them
     type_bag bag = randomBag();
     //std::find gives inscrutable template errors for no discernable reason
@@ -580,7 +596,7 @@ int main(int, char const**) {
     }
 
     //disallow generating a farm tile before a water tile
-    if (farmIndex > waterIndex)
+    if (farmIndex < waterIndex)
         std::swap(bag.types[farmIndex], bag.types[waterIndex]);
 
     for (int i = 2; i < 25 - 2; ++i)
@@ -629,19 +645,19 @@ int main(int, char const**) {
             if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Space) {
                 move best;
 
-                //TODO: optimize selection algorithm to take tile bag behavior into account
                 sf::Clock clock;
                 if (turns < 2) {
                     best = findBestMove(state, type(bag));
                 } else {
-//                    best = findBestMove(state, nextType);
+//                    best = findBestMove(state, type(bag));
 //                    best = minimax(state, type(bag), std::min(turns, 3));
-                    best = avgmax(state, type(bag), std::min(turns, 3));
+                    best = avgmax(state, bag, std::min(turns, 4));
                 }
                 sf::Time elapsed = clock.getElapsedTime();
                 fullTime += elapsed;
 
-                printf("\nBEST MOVE OVERALL: %d, %d: %d\n", best.x, best.y, best.value);
+                printf("\nTURNS: %d\n", turns);
+                printf("BEST MOVE OVERALL: %d, %d: %d\n", best.x, best.y, best.value);
                 printf("      TIME ELAPSED: %f\n", elapsed.asSeconds());
                 printf("TOTAL TIME ELAPSED: %f\n\n", fullTime.asSeconds());
 
@@ -651,6 +667,7 @@ int main(int, char const**) {
                 --turns;
             }
 
+            //XXX: THIS IS WRONG!!!
             if (event.type == sf::Event::KeyPressed) {
                 switch (event.key.code) {
 //                    case sf::Keyboard::Num1: nextType = WASTE; break;

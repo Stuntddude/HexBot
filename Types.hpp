@@ -45,9 +45,16 @@ const i8 FARM   = 3;
 const i8 CITY   = 4;
 const i8 MARKED = 5;
 
+//because std::random_shuffle fucking sucks, apparently?
+void random_shuffle(i8 types[]) {
+    for (int i = 4; i > 1; --i) {
+        std::swap(types[rand() % i], types[i - 1]);
+    }
+}
+
 type_bag randomBag() {
     type_bag bag = { 0, { WASTE, WATER, FARM, CITY } };
-    std::random_shuffle(bag.types, bag.types + 4);
+    random_shuffle(bag.types);
     return bag;
 }
 
@@ -60,8 +67,22 @@ void pickNext(type_bag &bag) {
 
     if (bag.index == 4) {
         bag.index = 0;
-        std::random_shuffle(bag.types, bag.types + 4);
+        random_shuffle(bag.types);
     }
+}
+
+type_bag pickNextSimple(type_bag &bag) {
+    ++bag.index;
+
+    if (bag.index == 4) {
+        bag.index = 0;
+//        bag = { 0, { WASTE, WATER, FARM, CITY } };
+    }
+}
+
+type_bag pick(type_bag bag, int i) {
+    std::swap(bag.types[bag.index], bag.types[i]);
+    return bag;
 }
 
 void printSizes() {
