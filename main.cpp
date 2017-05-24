@@ -67,8 +67,7 @@ void drawGame(sf::RenderWindow &window, sf::Font &font, cell state[],
         window.draw(text);
     }
 
-
-
+    //draw game tiles
     for (int y = 0; y < 5; ++y) {
         for (int x = 0; x < 5; ++x) {
             if (exists(x, y)) {
@@ -102,9 +101,11 @@ void drawGame(sf::RenderWindow &window, sf::Font &font, cell state[],
     }
 }
 
+//figures out whether there's any water within 2 tiles of the given tile
 bool findWater(cell state[], int x0, int y0) {
     for (int y = 0; y < 5; ++y) {
         for (int x = 0; x < 5; ++x) {
+            //NOTE: this logic relies on the water radius being equal to the board radius
             if (exists(x, y) &&
                 valid(x + 2 - x0, y + 2 - y0) &&
                 state[y * 5 + x].type == WATER) {
@@ -115,6 +116,8 @@ bool findWater(cell state[], int x0, int y0) {
     return false;
 }
 
+//kills off any farms not within 2 tiles of water
+//TODO: optimize this to only check the tiles within range (and maybe cache known watered tiles?)
 void updateFarms(cell state[]) {
     for (int y = 0; y < 5; ++y) {
         for (int x = 0; x < 5; ++x) {
@@ -174,7 +177,8 @@ int sumNeighboringCities(cell state[], int x, int y) {
     return sum;
 }
 
-int fl(cell state[], int x, int y, i8 type) { //AKA floodImpl
+//flood fill tiles of a given type, turning them into the MARKED type
+int fl(cell state[], int x, int y, i8 type) {
     int i = y * 5 + x;
     state[i].type = MARKED;
 
@@ -185,17 +189,6 @@ int fl(cell state[], int x, int y, i8 type) { //AKA floodImpl
     if (valid(x + 1, y    ) && state[i + 1].type == type) count += fl(state, x + 1, y    , type);
     if (valid(x - 1, y + 1) && state[i + 4].type == type) count += fl(state, x - 1, y + 1, type);
     if (valid(x    , y + 1) && state[i + 5].type == type) count += fl(state, x    , y + 1, type);
-
-    return count;
-}
-
-int flood(cell state[], int x, int y, i8 type) {
-    int count = fl(state, x, y, type);
-
-    //return all marked tiles to their prior state
-    for (int i = 2; i < 25 - 2; ++i)
-        if (state[i].type == MARKED)
-            state[i].type = type;
 
     return count;
 }
@@ -220,20 +213,19 @@ void updateCities(cell state[]) {
         for (int x = 0; x < 5; ++x) {
             int i = y * 5 + x;
             if (exists(x, y) && state[i].type == CITY) {
-                int maxLevel = hasNeighbor(state, x, y, WATER)? 1 : 0;
-                //TODO: do this in a way that avoids filling farms multiple times
+                //count all connected farms
+                //TODO: avoid filling farms multiple times when there are multiple cities connected
                 int farms = fl(state, x, y, FARM);
-                maxLevel += farms;
+                //return all marked tiles to their prior state
                 if (farms > 1) {
-                    //return all marked tiles to their prior state
                     for (int j = 2; j < 25 - 2; ++j)
                         if (state[j].type == MARKED)
                             state[j].type = FARM;
                 }
-
                 state[i].type = CITY;
 
                 //level up
+                int maxLevel = farms + (hasNeighbor(state, x, y, WATER)? 1 : 0);
                 state[i].data = std::min(state[i].data + 1, maxLevel);
 
                 //build list of all cities with multiple neighbors
@@ -247,6 +239,7 @@ void updateCities(cell state[]) {
         }
     }
 
+    //sorting is necessary to match the behavior of the canonical game
     std::sort(list, list + cities);
 
     for (int i = 0; i < cities; ++i)
@@ -317,7 +310,7 @@ void place(cell state[], int x, int y, i8 type) {
     state[i].data = 0;
 
     if (prior == WATER || type == WATER) {
-        //TODO: only update neighboring water???
+        //TODO: if placing water, only flood that tile
         if (hasNeighbor(state, x, y, WATER))
             updateWater(state);
         else
@@ -325,6 +318,7 @@ void place(cell state[], int x, int y, i8 type) {
     }
 
     if (prior == WATER) {
+        //if removing water, update all
         updateFarms(state);
     } else if (type == FARM && !findWater(state, x, y)) {
         //if we're placing farmland, we only need to update the tile we're placing
@@ -350,20 +344,13 @@ move findBestMove(cell state[], i8 nextType) {
                 memcpy(next + 2, state + 2, 21 * sizeof(cell));
 
                 place(next, x, y, nextType);
-
                 int value = score(next);
 
                 if (value > best.value) {
                     best.x = x;
                     best.y = y;
                     best.value = value;
-
-//                    printf("NEW BEST: ");
-//                } else {
-//                    printf("          ");
                 }
-
-//                printf("%d, %d: %d\n", x, y, value);
             }
         }
     }
@@ -415,13 +402,7 @@ move minimax(cell state[], i8 nextType, int layer) {
                     best.x = x;
                     best.y = y;
                     best.value = value;
-
-//                    printf("NEW BEST: ");
-//                } else {
-//                    printf("          ");
                 }
-
-//                printf("%d, %d: %d\n", x, y, value);
             }
         }
     }
@@ -444,7 +425,6 @@ move findBestAverageMove(cell state[], type_bag bag){
                 int total = 0;
                 int divisor = 0;
 
-//                for (int t = WASTE; t <= CITY; ++t) {
                 for (int i = bag.index; i < 4; ++i) {
                     i8 t = bag.types[i];
                     if (t != state[i].type) {
@@ -452,7 +432,6 @@ move findBestAverageMove(cell state[], type_bag bag){
                         memcpy(next + 2, state + 2, 21 * sizeof(cell));
 
                         place(next, x, y, t);
-
                         total += score(next);
                         ++divisor;
                     }
@@ -460,8 +439,7 @@ move findBestAverageMove(cell state[], type_bag bag){
 
                 //accidentally dividing by 0 could fuck us up, so preferably don't do that
                 if (divisor > 0) {
-                    //probably only one of these casts is necessary
-                    int avg = round(static_cast<float>(total)/static_cast<float>(divisor));
+                    int avg = round(static_cast<float>(total)/divisor);
 
                     if (avg > best.value) {
                         best.x = x;
@@ -476,7 +454,7 @@ move findBestAverageMove(cell state[], type_bag bag){
     return best;
 }
 
-int avgmaxImpl(cell state[], type_bag bag, int layer) {
+int expectimaxImpl(cell state[], type_bag bag, int layer) {
     pickNextSimple(bag);
 
     if (layer < 2) {
@@ -496,8 +474,7 @@ int avgmaxImpl(cell state[], type_bag bag, int layer) {
                 int divisor = 0;
 
                 //the bot can't know which type comes next in the bag, only which ones are left,
-                //so it must treat every possibility as eaqually probable
-//                for (int t = WASTE; t <= CITY; ++t) {
+                //so it must treat every possibility as equally probable
                 for (int i = bag.index; i < 4; ++i) {
                     i8 t = bag.types[i];
                     if (t != state[i].type) {
@@ -505,9 +482,7 @@ int avgmaxImpl(cell state[], type_bag bag, int layer) {
                         memcpy(next + 2, state + 2, 21 * sizeof(cell));
 
                         place(next, x, y, t);
-
-//                        total += score(next);
-                        total += avgmaxImpl(next, pick(bag, i), layer - 1);
+                        total += expectimaxImpl(next, pick(bag, i), layer - 1);
                         ++divisor;
                     }
                 }
@@ -529,7 +504,7 @@ int avgmaxImpl(cell state[], type_bag bag, int layer) {
     return best.value + score(state);
 }
 
-move avgmax(cell state[], type_bag bag, int layer) {
+move expectimax(cell state[], type_bag bag, int layer) {
     cell next[5 * 5 - 2];
 
     move best = { 0, 0, -32000 };
@@ -544,7 +519,7 @@ move avgmax(cell state[], type_bag bag, int layer) {
 
                 place(next, x, y, type(bag));
 
-                int value = avgmaxImpl(next, bag, layer - 1);
+                int value = expectimaxImpl(next, bag, layer - 1);
 
                 if (value > best.value) {
                     best.x = x;
@@ -651,7 +626,7 @@ int main(int, char const**) {
                 } else {
 //                    best = findBestMove(state, type(bag));
 //                    best = minimax(state, type(bag), std::min(turns, 3));
-                    best = avgmax(state, bag, std::min(turns, 4));
+                    best = expectimax(state, bag, std::min(turns, 4));
                 }
                 sf::Time elapsed = clock.getElapsedTime();
                 fullTime += elapsed;
@@ -667,19 +642,12 @@ int main(int, char const**) {
                 --turns;
             }
 
-            //XXX: THIS IS WRONG!!!
             if (event.type == sf::Event::KeyPressed) {
                 switch (event.key.code) {
-//                    case sf::Keyboard::Num1: nextType = WASTE; break;
-//                    case sf::Keyboard::Num2: nextType = WATER; break;
-//                    case sf::Keyboard::Num3: nextType = FARM ; break;
-//                    case sf::Keyboard::Num4: nextType = CITY ; break;
-                    case sf::Keyboard::LBracket:
-                        std::rotate(bag.types, bag.types + 1, bag.types + 4);
-                        break;
-                    case sf::Keyboard::RBracket:
-                        std::rotate(bag.types, bag.types + 3, bag.types + 4);
-                        break;
+                    case sf::Keyboard::Num1: setNext(bag, WASTE); break;
+                    case sf::Keyboard::Num2: setNext(bag, WATER); break;
+                    case sf::Keyboard::Num3: setNext(bag, FARM ); break;
+                    case sf::Keyboard::Num4: setNext(bag, CITY ); break;
                     default: break;
                 }
             }

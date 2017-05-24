@@ -71,18 +71,24 @@ void pickNext(type_bag &bag) {
     }
 }
 
-type_bag pickNextSimple(type_bag &bag) {
+void pickNextSimple(type_bag &bag) {
     ++bag.index;
 
-    if (bag.index == 4) {
+    if (bag.index == 4)
         bag.index = 0;
-//        bag = { 0, { WASTE, WATER, FARM, CITY } };
-    }
 }
 
 type_bag pick(type_bag bag, int i) {
     std::swap(bag.types[bag.index], bag.types[i]);
     return bag;
+}
+
+void setNext(type_bag &bag, i8 type) {
+    int index = bag.index;
+    for (int i = bag.index + 1; i < 4; ++i)
+        if (bag.types[i] == type)
+            index = i;
+    std::swap(bag.types[index], bag.types[bag.index]);
 }
 
 void printSizes() {
